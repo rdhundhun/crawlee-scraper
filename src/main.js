@@ -1566,6 +1566,93 @@ async function fetchWithFlareSolverr(url, log) {
 }
 
 /* ============================================================
+   PLAYWRIGHT RECOVERY
+   ============================================================ */
+
+async function fetchWithPlaywright(url, log) {
+    log.info(`Playwright recovery started: ${url}`);
+
+    let result = null;
+
+    try {
+        const browserCrawler =
+            new PlaywrightCrawler({
+                maxConcurrency: 1,
+                maxRequestsPerCrawl: 1,
+
+                async requestHandler({
+                    request,
+                    page,
+                    log: crawlerLog
+                }) {
+                    const loadedUrl =
+                        request.loadedUrl ||
+                        request.url;
+
+                    crawlerLog.info(
+                        `Playwright fetching: ${loadedUrl}`
+                    );
+
+                    await page.waitForLoadState(
+                        'domcontentloaded'
+                    );
+
+                    const html =
+                        await page.content();
+
+                    const finalUrl =
+                        page.url() ||
+                        loadedUrl;
+
+                    if (!html.trim()) {
+                        throw new Error(
+                            'Playwright returned empty HTML'
+                        );
+                    }
+
+                    result = {
+                        html,
+                        status: null,
+                        url: finalUrl
+                    };
+
+                    crawlerLog.info(
+                        `Playwright returned ${html.length} HTML characters`
+                    );
+                }
+            });
+
+        await browserCrawler.run([url]);
+
+        if (!result) {
+            throw new Error(
+                'Playwright did not return captured HTML'
+            );
+        }
+
+        return {
+            success: true,
+            html: result.html,
+            status: result.status,
+            url: result.url || url
+        };
+
+    } catch (error) {
+        log.info(
+            `Playwright recovery failed: ${error.message}`
+        );
+
+        return {
+            success: false,
+            html: '',
+            status: null,
+            url,
+            error: error.message
+        };
+    }
+}
+
+/* ============================================================
    SCRAPLING RECOVERY
    ============================================================ */
 
@@ -2038,11 +2125,11 @@ log.info(
             return;
         }
 
-        /* ========================================================
-           BLOCKED PAGE CHECK
-           ======================================================== */
+      /* ========================================================
+   BLOCKED PAGE CHECK
+   ======================================================== */
 
-        if (
+if (
     isBlockedPage(
         html,
         htmlToVisibleText(html)
@@ -2051,6 +2138,52 @@ log.info(
     log.info(
         `Blocked/challenge page detected: ${url}`
     );
+
+    /* ========================================================
+       PLAYWRIGHT RECOVERY
+       ======================================================== */
+
+    const playwrightRecovery =
+        await fetchWithPlaywright(
+            url,
+            log
+        );
+
+    if (playwrightRecovery.success) {
+
+        const playwrightArticle =
+            extractArticleFromRecoveredHtml(
+                playwrightRecovery.html,
+                playwrightRecovery.url || url,
+                log
+            );
+
+        if (
+            playwrightArticle.articleExtractionValid
+        ) {
+            await pushData(
+                playwrightArticle
+            );
+
+            log.info(
+                `Playwright recovery result: ${url} - ` +
+                `${playwrightArticle.articleWordCount} words - ` +
+                `${playwrightArticle.articleExtractionMethod}`
+            );
+
+            return;
+        }
+
+        log.info(
+            `Playwright recovery did not produce a valid article, trying FlareSolverr: ${url}`
+        );
+
+    } else {
+
+        log.info(
+            `Playwright recovery failed, trying FlareSolverr: ${url}`
+        );
+    }
 
     /* ========================================================
        FLARESOLVERR RECOVERY
@@ -2063,6 +2196,7 @@ log.info(
         );
 
     if (recovered.success) {
+
         const recoveredArticle =
             extractArticleFromRecoveredHtml(
                 recovered.html,
@@ -2070,22 +2204,32 @@ log.info(
                 log
             );
 
-        await pushData(
-            recoveredArticle
-        );
+        if (
+            recoveredArticle.articleExtractionValid
+        ) {
+            await pushData(
+                recoveredArticle
+            );
+
+            log.info(
+                `FlareSolverr recovery result: ${url} - ` +
+                `${recoveredArticle.articleWordCount} words - ` +
+                `${recoveredArticle.articleExtractionMethod}`
+            );
+
+            return;
+        }
 
         log.info(
-            `FlareSolverr recovery result: ${url} - ` +
-            `${recoveredArticle.articleWordCount} words - ` +
-            `${recoveredArticle.articleExtractionMethod}`
+            `FlareSolverr recovery did not produce a valid article, trying Scrapling: ${url}`
         );
 
-        return;
-    }
+    } else {
 
-    log.info(
-        `FlareSolverr recovery failed, trying Scrapling: ${url}`
-    );
+        log.info(
+            `FlareSolverr recovery failed, trying Scrapling: ${url}`
+        );
+    }
 
     /* ========================================================
        SCRAPLING FINAL RECOVERY
@@ -2098,6 +2242,7 @@ log.info(
         );
 
     if (scrapling.success) {
+
         const scraplingArticle =
             extractArticleFromRecoveredHtml(
                 scrapling.html,
@@ -2105,17 +2250,31 @@ log.info(
                 log
             );
 
-        await pushData(
-            scraplingArticle
-        );
+        if (
+            scraplingArticle.articleExtractionValid
+        ) {
+            await pushData(
+                scraplingArticle
+            );
+
+            log.info(
+                `Scrapling recovery result: ${url} - ` +
+                `${scraplingArticle.articleWordCount} words - ` +
+                `${scraplingArticle.articleExtractionMethod}`
+            );
+
+            return;
+        }
 
         log.info(
-            `Scrapling recovery result: ${url} - ` +
-            `${scraplingArticle.articleWordCount} words - ` +
-            `${scraplingArticle.articleExtractionMethod}`
+            `Scrapling recovery did not produce a valid article: ${url}`
         );
 
-        return;
+    } else {
+
+        log.info(
+            `Scrapling recovery failed: ${url}`
+        );
     }
 
     /* ========================================================
@@ -2124,40 +2283,23 @@ log.info(
 
     await pushData({
         url,
-
-        title:
-            storyTitle,
-
-        description:
-            storyDescription,
-
+        title: storyTitle,
+        description: storyDescription,
         articleText: '',
-
         articleTextLength: 0,
-
         articleWordCount: 0,
-
         articleExtractionMethod:
             'blocked-page',
-
-        articleExtractionValid:
-            false,
-
+        articleExtractionValid: false,
         articleExtractionFailureReason:
             'publisher-blocked-or-captcha',
-
-        articleUpdatedFromBody:
-            '',
-
-        articleUpdatedFromStructured:
-            '',
-
-        articleIsLivePage:
-            false
+        articleUpdatedFromBody: '',
+        articleUpdatedFromStructured: '',
+        articleIsLivePage: false
     });
 
     log.info(
-        `FlareSolverr and Scrapling recovery failed: ${url}`
+        `Playwright, FlareSolverr and Scrapling recovery failed: ${url}`
     );
 
     return;
