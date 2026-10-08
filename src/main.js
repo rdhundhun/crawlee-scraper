@@ -1566,6 +1566,107 @@ async function fetchWithFlareSolverr(url, log) {
 }
 
 /* ============================================================
+   SCRAPLING RECOVERY
+   ============================================================ */
+
+const SCRAPLING_URL =
+    process.env.SCRAPLING_URL ||
+    'http://scrapling:8000/scrape';
+
+async function fetchWithScrapling(url, log) {
+    log.info(`Scrapling recovery started: ${url}`);
+
+    try {
+        const response =
+            await fetch(
+                SCRAPLING_URL,
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body: JSON.stringify({
+                        url
+                    }),
+
+                    signal:
+                        AbortSignal.timeout(
+                            70000
+                        )
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                `Scrapling HTTP ${response.status}`
+            );
+        }
+
+        const data =
+            await response.json();
+
+        if (!data.success) {
+            throw new Error(
+                data.error ||
+                'Scrapling returned unsuccessful response'
+            );
+        }
+
+        const html =
+            data.html || '';
+
+        const status =
+            data.status || null;
+
+        const finalUrl =
+            data.url || url;
+
+        if (!html.trim()) {
+            throw new Error(
+                'Scrapling returned empty HTML'
+            );
+        }
+
+        log.info(
+            `Scrapling returned ${html.length} HTML characters, status ${status}`
+        );
+
+        return {
+            success: true,
+
+            html,
+
+            status,
+
+            url: finalUrl
+        };
+
+    } catch (error) {
+
+        log.info(
+            `Scrapling failed: ${error.message}`
+        );
+
+        return {
+            success: false,
+
+            html: '',
+
+            status: null,
+
+            url,
+
+            error:
+                error.message
+        };
+    }
+}
+
+
+/* ============================================================
    EXTRACT ARTICLE FROM RECOVERED HTML
    ============================================================ */
 
