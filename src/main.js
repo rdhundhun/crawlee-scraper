@@ -190,7 +190,7 @@ function isBlockedPage(html, text) {
     ];
 
     const rawSignals = [
-        'geo.captcha-delivery.com/interstitial',
+        'geo.captcha-delivery.com',
         '/cdn-cgi/challenge-platform/',
         'cf-chl-',
         '_cf_chl_',
