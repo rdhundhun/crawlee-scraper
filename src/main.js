@@ -1566,6 +1566,284 @@ async function fetchWithFlareSolverr(url, log) {
 }
 
 /* ============================================================
+   EXTRACT ARTICLE FROM RECOVERED HTML
+   ============================================================ */
+
+function extractArticleFromRecoveredHtml(
+    html,
+    requestedUrl,
+    log
+) {
+    const source = String(html || '');
+
+    if (!source.trim()) {
+        log.info(
+            `Recovered HTML is empty: ${requestedUrl}`
+        );
+
+        return {
+            url: requestedUrl,
+            title: '',
+            description: '',
+            articleText: '',
+            articleTextLength: 0,
+            articleWordCount: 0,
+            articleExtractionMethod:
+                'recovered-html-empty',
+            articleExtractionValid: false,
+            articleExtractionFailureReason:
+                'recovered-html-empty',
+            articleUpdatedFromBody: '',
+            articleUpdatedFromStructured: '',
+            articleIsLivePage: false
+        };
+    }
+
+    const title =
+        extractPageTitle(source);
+
+    const descriptionMatch =
+        source.match(
+            /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i
+        ) ||
+        source.match(
+            /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i
+        ) ||
+        source.match(
+            /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i
+        ) ||
+        source.match(
+            /<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:description["']/i
+        );
+
+    const description =
+        descriptionMatch
+            ? normalizeText(descriptionMatch[1])
+            : '';
+
+    /* ========================================================
+       BLOCKED / CHALLENGE PAGE CHECK
+       ======================================================== */
+
+    if (
+        isBlockedPage(
+            source,
+            htmlToVisibleText(source)
+        )
+    ) {
+        log.info(
+            `Recovered HTML is still blocked/challenge page: ${requestedUrl}`
+        );
+
+        return {
+            url: requestedUrl,
+            title,
+            description,
+            articleText: '',
+            articleTextLength: 0,
+            articleWordCount: 0,
+            articleExtractionMethod:
+                'recovered-blocked-page',
+            articleExtractionValid: false,
+            articleExtractionFailureReason:
+                'recovered-page-still-blocked-or-captcha',
+            articleUpdatedFromBody: '',
+            articleUpdatedFromStructured: '',
+            articleIsLivePage: false
+        };
+    }
+
+    /* ========================================================
+       LIVE PAGE DETECTION
+       ======================================================== */
+
+    const liveSignals = [
+        /live updates?/i,
+        /live blog/i,
+        /live coverage/i,
+        /live tracker/i,
+        /live briefing/i,
+        /minute[- ]by[- ]minute/i
+    ];
+
+    const isLivePage =
+        liveSignals.some(
+            pattern =>
+                pattern.test(title) ||
+                pattern.test(source)
+        );
+
+    let articleText = '';
+    let method = '';
+    let structuredUpdate = null;
+
+    /* ========================================================
+       LIVE PAGE
+       ======================================================== */
+
+    if (isLivePage) {
+
+        structuredUpdate =
+            extractStructuredLiveUpdate(
+                source,
+                title,
+                description
+            );
+
+        if (structuredUpdate) {
+
+            const domUpdate =
+                extractLiveUpdateFromDom(
+                    source,
+                    structuredUpdate
+                );
+
+            if (
+                domUpdate &&
+                wordCount(domUpdate.body) >= 50
+            ) {
+                articleText =
+                    domUpdate.body;
+
+                method =
+                    'recovered-live-update-dom';
+
+            } else {
+                articleText =
+                    structuredUpdate.body;
+
+                method =
+                    'recovered-live-update-structured';
+            }
+
+        } else {
+
+            const live =
+                extractLiveUpdateFallback(
+                    source,
+                    title,
+                    description
+                );
+
+            if (live) {
+                articleText =
+                    live.body;
+
+                method =
+                    'recovered-live-update-matched';
+            }
+        }
+
+    } else {
+
+        /* ====================================================
+           NORMAL ARTICLE
+           ==================================================== */
+
+        const normal =
+            extractNormalArticle(
+                source,
+                title,
+                description
+            );
+
+        articleText =
+            normal.text;
+
+        method =
+            `recovered-${normal.method}`;
+    }
+
+    /* ========================================================
+       UPDATE NOTICE
+       ======================================================== */
+
+    const updateInfo =
+        extractUpdateNotice(
+            articleText
+        );
+
+    articleText =
+        finalClean(
+            updateInfo.cleanedText
+        );
+
+    /* ========================================================
+       FINAL BLOCK CHECK
+       ======================================================== */
+
+    const blockedAfterExtraction =
+        isBlockedPage(
+            source,
+            articleText
+        );
+
+    /* ========================================================
+       FINAL VALIDATION
+       ======================================================== */
+
+    const finalWordCount =
+        wordCount(articleText);
+
+    const extractionValid =
+        !blockedAfterExtraction &&
+        finalWordCount >= 50;
+
+    if (!extractionValid) {
+        log.info(
+            `Recovered extraction invalid: ${requestedUrl} (${finalWordCount} words)`
+        );
+    } else {
+        log.info(
+            `Recovered extraction valid: ${requestedUrl} (${finalWordCount} words)`
+        );
+    }
+
+    return {
+        url: requestedUrl,
+
+        title,
+
+        description,
+
+        articleText,
+
+        articleTextLength:
+            articleText.length,
+
+        articleWordCount:
+            finalWordCount,
+
+        articleExtractionMethod:
+            blockedAfterExtraction
+                ? 'recovered-blocked-page'
+                : method,
+
+        articleExtractionValid:
+            extractionValid,
+
+        articleExtractionFailureReason:
+            blockedAfterExtraction
+                ? 'recovered-page-still-blocked-or-captcha'
+                : extractionValid
+                    ? ''
+                    : 'recovered-article-text-too-short',
+
+        articleUpdatedFromBody:
+            updateInfo.updatedFromArticle ||
+            '',
+
+        articleUpdatedFromStructured:
+            structuredUpdate?.modified ||
+            structuredUpdate?.published ||
+            '',
+
+        articleIsLivePage:
+            isLivePage
+    };
+}
+
+/* ============================================================
    CHEERIO CRAWLER
    ============================================================ */
 
@@ -2166,21 +2444,27 @@ app.post('/scrape', async (req, res) => {
     }
 
     try {
-        const result = await crawler.addRequests([url]);
+        if (crawler.running) {
+            const result = await crawler.addRequests([url]);
 
-        if (!crawler.running) {
-            crawler.run().catch(error => {
-                console.error('Crawler error:', error);
+            return res.json({
+                success: true,
+                message: `Added ${url} to the running Crawlee queue.`,
+                requestId: result?.processedRequests?.[0]?.uniqueKey || null,
             });
         }
 
+        crawler.run([url]).catch(error => {
+            console.error('Crawler error:', error);
+        });
+
         return res.json({
             success: true,
-            message: `Added ${url} to the Crawlee queue.`,
-            requestId: result?.processedRequests?.[0]?.uniqueKey || null,
+            message: `Started Crawlee for ${url}.`,
+            requestId: null,
         });
     } catch (error) {
-        console.error('Failed to queue URL:', error);
+        console.error('Failed to start crawler:', error);
 
         return res.status(500).json({
             success: false,
