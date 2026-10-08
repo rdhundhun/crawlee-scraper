@@ -1853,8 +1853,12 @@ const crawler = new CheerioCrawler({
     maxConcurrency: 1,
 
     maxRequestsPerCrawl: 1000,
-      
+
     ignoreHttpErrorStatusCodes: [401],
+
+    sessionPoolOptions: {
+        blockedStatusCodes: [403, 429],
+    },
 
     async requestHandler({
         request,
