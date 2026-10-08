@@ -1834,7 +1834,7 @@ app.post('/scrape', async (req, res) => {
         const result = await crawler.addRequests([url]);
 
         if (!crawler.running) {
-            crawler.run([], { keepAlive: true }).catch(error => {
+            crawler.run().catch(error => {
                 console.error('Crawler error:', error);
             });
         }
