@@ -1873,6 +1873,14 @@ const crawler = new CheerioCrawler({
         const html =
             $.html();
 
+       log.info(
+    `DEBUG Reuters response: status=${request.response?.statusCode || 'unknown'}, htmlLength=${html.length}`
+);
+
+log.info(
+    `DEBUG Reuters HTML start: ${html.slice(0, 1000)}`
+);
+
         const storyTitle =
             extractPageTitle(html);
 
