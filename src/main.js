@@ -1459,6 +1459,113 @@ function finalClean(text) {
 }
 
 /* ============================================================
+   FLARESOLVERR
+   ============================================================ */
+
+const FLARESOLVERR_URL =
+    process.env.FLARESOLVERR_URL ||
+    'http://10.0.2.5:8191/v1';
+
+async function fetchWithFlareSolverr(url, log) {
+    log.info(`FlareSolverr recovery started: ${url}`);
+
+    try {
+        const response =
+            await fetch(
+                FLARESOLVERR_URL,
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body: JSON.stringify({
+                        cmd: 'request.get',
+
+                        url,
+
+                        maxTimeout: 120000
+                    }),
+
+                    signal:
+                        AbortSignal.timeout(
+                            130000
+                        )
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                `FlareSolverr HTTP ${response.status}`
+            );
+        }
+
+        const data =
+            await response.json();
+
+        if (
+            data.status !== 'ok' ||
+            !data.solution
+        ) {
+            throw new Error(
+                data.message ||
+                'FlareSolverr returned no solution'
+            );
+        }
+
+        const html =
+            data.solution.response || '';
+
+        const status =
+            data.solution.status || null;
+
+        const finalUrl =
+            data.solution.url || url;
+
+        if (!html.trim()) {
+            throw new Error(
+                'FlareSolverr returned empty HTML'
+            );
+        }
+
+        log.info(
+            `FlareSolverr returned ${html.length} HTML characters, status ${status}`
+        );
+
+        return {
+            success: true,
+
+            html,
+
+            status,
+
+            url: finalUrl
+        };
+
+    } catch (error) {
+
+        log.info(
+            `FlareSolverr failed: ${error.message}`
+        );
+
+        return {
+            success: false,
+
+            html: '',
+
+            status: null,
+
+            url,
+
+            error:
+                error.message
+        };
+    }
+}
+
+/* ============================================================
    CHEERIO CRAWLER
    ============================================================ */
 
