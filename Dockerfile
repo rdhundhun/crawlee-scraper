@@ -1,4 +1,4 @@
-FROM apify/actor-node-playwright-chrome:24-1.60.0-slim
+FROM apify/actor-node-playwright-chrome:22-slim
 
 WORKDIR /app
 
