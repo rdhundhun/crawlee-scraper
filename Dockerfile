@@ -1,4 +1,4 @@
-FROM apify/actor-node-playwright-chrome:24-1.60.0-slim
+FROM mcr.microsoft.com/playwright:v1.48.0-jammy
 
 WORKDIR /app
 
