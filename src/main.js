@@ -263,6 +263,7 @@ function extractJsonLdObjects(html) {
             for (const item of value) {
                 addRecursive(item);
             }
+
             return;
         }
 
@@ -1667,6 +1668,7 @@ const crawler = new CheerioCrawler({
 
                     method =
                         'live-update-matched';
+
                 } else {
                     await pushData({
                         url,
@@ -1837,21 +1839,207 @@ const playwrightCrawler = new PlaywrightCrawler({
         const html =
             await page.content();
 
-        const title =
+        const storyTitle =
             await page.title();
 
-        const bodyText =
-            await page.locator('body').innerText();
+        const storyDescription =
+            await page
+                .locator('meta[name="description"]')
+                .getAttribute('content')
+                .catch(() => null) ||
+            await page
+                .locator('meta[property="og:description"]')
+                .getAttribute('content')
+                .catch(() => null) ||
+            '';
+
+        if (!html.trim()) {
+            log.info(
+                `Playwright recovery received empty HTML: ${url}`
+            );
+
+            return {
+                url,
+                title: storyTitle,
+                description: storyDescription,
+                articleText: '',
+                articleTextLength: 0,
+                articleWordCount: 0,
+                articleExtractionMethod:
+                    'publisher-html-empty',
+                articleExtractionValid: false,
+                articleExtractionFailureReason:
+                    'publisher-html-empty',
+                articleUpdatedFromBody: '',
+                articleUpdatedFromStructured: '',
+                articleIsLivePage: false
+            };
+        }
+
+        if (
+            isBlockedPage(
+                html,
+                htmlToVisibleText(html)
+            )
+        ) {
+            log.info(
+                `Playwright recovery found blocked page: ${url}`
+            );
+
+            return {
+                url,
+                title: storyTitle,
+                description: storyDescription,
+                articleText: '',
+                articleTextLength: 0,
+                articleWordCount: 0,
+                articleExtractionMethod:
+                    'blocked-page',
+                articleExtractionValid: false,
+                articleExtractionFailureReason:
+                    'publisher-blocked-or-captcha',
+                articleUpdatedFromBody: '',
+                articleUpdatedFromStructured: '',
+                articleIsLivePage: false
+            };
+        }
+
+        const liveSignals = [
+            /live updates?/i,
+            /live blog/i,
+            /live coverage/i,
+            /live tracker/i,
+            /live briefing/i,
+            /minute[- ]by[- ]minute/i
+        ];
+
+        const isLivePage =
+            liveSignals.some(
+                pattern =>
+                    pattern.test(storyTitle) ||
+                    pattern.test(html)
+            );
+
+        let articleText = '';
+        let method = '';
+        let structuredUpdate = null;
+
+        if (isLivePage) {
+            structuredUpdate =
+                extractStructuredLiveUpdate(
+                    html,
+                    storyTitle,
+                    storyDescription
+                );
+
+            if (structuredUpdate) {
+                const domUpdate =
+                    extractLiveUpdateFromDom(
+                        html,
+                        structuredUpdate
+                    );
+
+                if (
+                    domUpdate &&
+                    wordCount(domUpdate.body) >= 50
+                ) {
+                    articleText =
+                        domUpdate.body;
+
+                    method =
+                        'live-update-dom';
+                } else {
+                    articleText =
+                        structuredUpdate.body;
+
+                    method =
+                        'live-update-structured';
+                }
+            } else {
+                const live =
+                    extractLiveUpdateFallback(
+                        html,
+                        storyTitle,
+                        storyDescription
+                    );
+
+                if (live) {
+                    articleText =
+                        live.body;
+
+                    method =
+                        'live-update-matched';
+                }
+            }
+        } else {
+            const normal =
+                extractNormalArticle(
+                    html,
+                    storyTitle,
+                    storyDescription
+                );
+
+            articleText =
+                normal.text;
+
+            method =
+                normal.method;
+        }
+
+        const updateInfo =
+            extractUpdateNotice(
+                articleText
+            );
+
+        articleText =
+            finalClean(
+                updateInfo.cleanedText
+            );
+
+        const blockedAfterExtraction =
+            isBlockedPage(
+                html,
+                articleText
+            );
+
+        const finalWordCount =
+            wordCount(articleText);
+
+        const extractionValid =
+            !blockedAfterExtraction &&
+            finalWordCount >= 50;
 
         log.info(
-            `Playwright received ${bodyText.length} characters from ${url}`
+            `Playwright extracted ${finalWordCount} words from ${url} using ${method}`
         );
 
         return {
             url,
-            title,
-            html,
-            bodyText
+            title: storyTitle,
+            description: storyDescription,
+            articleText,
+            articleTextLength: articleText.length,
+            articleWordCount: finalWordCount,
+            articleExtractionMethod:
+                blockedAfterExtraction
+                    ? 'blocked-page'
+                    : method,
+            articleExtractionValid:
+                extractionValid,
+            articleExtractionFailureReason:
+                blockedAfterExtraction
+                    ? 'publisher-blocked-or-captcha'
+                    : extractionValid
+                        ? ''
+                        : 'article-text-too-short',
+            articleUpdatedFromBody:
+                updateInfo.updatedFromArticle || '',
+            articleUpdatedFromStructured:
+                structuredUpdate?.modified ||
+                structuredUpdate?.published ||
+                '',
+            articleIsLivePage:
+                isLivePage
         };
     }
 });
