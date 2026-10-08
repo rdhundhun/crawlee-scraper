@@ -1,50 +1,83 @@
 // src/main.js
+
 import express from 'express';
-import { PlaywrightCrawler, RequestQueue } from 'crawlee';
+import { CheerioCrawler, RequestQueue } from 'crawlee';
 
 const app = express();
+
 app.use(express.json());
 
-// 1. Open a global RequestQueue to hold URLs from n8n
+// Shared queue for URLs received from n8n
 const requestQueue = await RequestQueue.open();
 
-// 2. Configure the Crawlee crawler (using Playwright since your current file uses it)
-const crawler = new PlaywrightCrawler({
+// Step 3:
+// Lightweight normal-page acquisition using CheerioCrawler.
+// Playwright and FlareSolverr will be added in later steps.
+const crawler = new CheerioCrawler({
     requestQueue,
-    // You can keep maxRequestsPerCrawl here if you want, or remove it for unlimited
-    maxRequestsPerCrawl: 1000, 
-    async requestHandler({ request, page, log, pushData }) {
-        const title = await page.title();
-        log.info(`Scraped: ${request.url} - ${title}`);
 
-        // Extract your article data here (adjust selectors as needed)
-        const articleText = await page.locator('article').innerText().catch(() => 'No article found');
-        
-        // Save results to the dataset
-        await pushData({ title, url: request.loadedUrl, text: articleText });
+    maxConcurrency: 1,
+
+    maxRequestsPerCrawl: 1000,
+
+    async requestHandler({ request, $, log, pushData }) {
+        const url = request.loadedUrl || request.url;
+
+        const title =
+            $('title').first().text().trim() ||
+            $('h1').first().text().trim();
+
+        const articleText = $('article')
+            .text()
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        log.info(`Scraped: ${url}`);
+
+        await pushData({
+            url,
+            title,
+            text: articleText,
+        });
     },
 });
 
-// 3. Create the API endpoint that n8n will call
+// n8n will call this endpoint later.
 app.post('/scrape', async (req, res) => {
     const { url } = req.body;
+
     if (!url) {
-        return res.status(400).json({ error: 'URL is required' });
+        return res.status(400).json({
+            success: false,
+            error: 'URL is required',
+        });
     }
 
-    // Add the URL from n8n to the crawler's queue
-    await crawler.addRequests([url]);
-    
-    // Start the crawler if it's not already running
-    if (!crawler.running) {
-        crawler.run().catch(err => console.error(err));
-    }
+    try {
+        await crawler.addRequests([url]);
 
-    res.json({ success: true, message: `Added ${url} to the queue.` });
+        if (!crawler.running) {
+            crawler.run().catch((error) => {
+                console.error('Crawler error:', error);
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: `Added ${url} to the Crawlee queue.`,
+        });
+    } catch (error) {
+        console.error('Failed to queue URL:', error);
+
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
 });
 
-// 4. Start the Express server so it never exits
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log(`Crawlee server listening on port ${PORT}`);
+    console.log(`Crawlee Cheerio server listening on port ${PORT}`);
 });
