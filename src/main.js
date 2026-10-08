@@ -1854,7 +1854,7 @@ const crawler = new CheerioCrawler({
 
     maxRequestsPerCrawl: 1000,
       
-    ignoreHttpErrors: true,
+    ignoreHttpErrorStatusCodes: [401],
 
     async requestHandler({
         request,
