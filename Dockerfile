@@ -1,4 +1,4 @@
-FROM ecmchow/node-playwright-pnpm:v1.63.0-node22-pnpm11-resolute
+FROM mcr.microsoft.com/playwright:v1.52.0-noble
 
 WORKDIR /app
 

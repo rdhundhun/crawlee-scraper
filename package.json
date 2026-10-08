@@ -5,11 +5,10 @@
     "type": "module",
     "description": "This is an example of a Crawlee project.",
     "dependencies": {
-  "@crawlee/impit-client": "^3.0.0",
   "crawlee": "^4.0.0",
   "express": "^5.2.1",
-  "playwright": "1.63.0"
-},
+  "playwright": "1.49.1"
+}
     "scripts": {
         "start": "node src/main.js",
         "test": "echo \"Error: oops, the actor has no tests yet, sad!\" && exit 1"
