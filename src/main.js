@@ -1928,52 +1928,82 @@ const crawler = new CheerioCrawler({
            ======================================================== */
 
         if (
-            isBlockedPage(
-                html,
-                htmlToVisibleText(html)
-            )
-        ) {
-            await pushData({
-                url,
+    isBlockedPage(
+        html,
+        htmlToVisibleText(html)
+    )
+) {
+    log.info(
+        `Blocked/challenge page detected: ${url}`
+    );
 
-                title:
-                    storyTitle,
+    const recovered =
+        await fetchWithFlareSolverr(
+            url,
+            log
+        );
 
-                description:
-                    storyDescription,
-
-                articleText: '',
-
-                articleTextLength: 0,
-
-                articleWordCount: 0,
-
-                articleExtractionMethod:
-                    'blocked-page',
-
-                articleExtractionValid:
-                    false,
-
-                articleExtractionFailureReason:
-                    'publisher-blocked-or-captcha',
-
-                articleUpdatedFromBody:
-                    '',
-
-                articleUpdatedFromStructured:
-                    '',
-
-                articleIsLivePage:
-                    false
-            });
-
-            log.info(
-                `Blocked/challenge page detected: ${url}`
+    if (recovered.success) {
+        const recoveredArticle =
+            extractArticleFromRecoveredHtml(
+                recovered.html,
+                recovered.url || url,
+                log
             );
 
-            return;
-        }
+        await pushData(
+            recoveredArticle
+        );
 
+        log.info(
+            `FlareSolverr recovery result: ${url} - ` +
+            `${recoveredArticle.articleWordCount} words - ` +
+            `${recoveredArticle.articleExtractionMethod}`
+        );
+
+        return;
+    }
+
+    await pushData({
+        url,
+
+        title:
+            storyTitle,
+
+        description:
+            storyDescription,
+
+        articleText: '',
+
+        articleTextLength: 0,
+
+        articleWordCount: 0,
+
+        articleExtractionMethod:
+            'blocked-page',
+
+        articleExtractionValid:
+            false,
+
+        articleExtractionFailureReason:
+            'publisher-blocked-or-captcha',
+
+        articleUpdatedFromBody:
+            '',
+
+        articleUpdatedFromStructured:
+            '',
+
+        articleIsLivePage:
+            false
+    });
+
+    log.info(
+        `FlareSolverr recovery failed: ${url}`
+    );
+
+    return;
+}
         /* ========================================================
            LIVE PAGE DETECTION
            ======================================================== */
