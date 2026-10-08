@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.49.1-jammy
+FROM octopixell/playwright-testbox:node-22-playwright-1.49.1
 
 WORKDIR /app
 
