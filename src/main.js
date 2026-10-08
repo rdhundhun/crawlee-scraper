@@ -1826,38 +1826,30 @@ app.post('/scrape', async (req, res) => {
     if (!url) {
         return res.status(400).json({
             success: false,
-            error: 'URL is required'
+            error: 'URL is required',
         });
     }
 
     try {
-        await crawler.addRequests([url]);
+        const result = await crawler.addRequests([url]);
 
         if (!crawler.running) {
-            crawler.run().catch(error => {
-                console.error(
-                    'Crawler error:',
-                    error
-                );
+            crawler.run([], { keepAlive: true }).catch(error => {
+                console.error('Crawler error:', error);
             });
         }
 
         return res.json({
             success: true,
-            message:
-                `Added ${url} to the Crawlee queue.`
+            message: `Added ${url} to the Crawlee queue.`,
+            requestId: result?.processedRequests?.[0]?.uniqueKey || null,
         });
-
     } catch (error) {
-        console.error(
-            'Failed to queue URL:',
-            error
-        );
+        console.error('Failed to queue URL:', error);
 
         return res.status(500).json({
             success: false,
-            error:
-                error.message
+            error: error.message,
         });
     }
 });
