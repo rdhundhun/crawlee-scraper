@@ -2197,11 +2197,26 @@ const crawler = new CheerioCrawler({
                 isLivePage
         });
 
-        log.info(
+            log.info(
             `Extracted ${finalWordCount} words from ${url} using ${method}`
+        );
+    },
+
+    async failedRequestHandler({ request, log, error }) {
+        log.error(
+            `REQUEST FAILED: ${request.url}`
+        );
+
+        log.error(
+            `ERROR MESSAGE: ${error?.message || 'unknown error'}`
+        );
+
+        log.error(
+            `ERROR STACK: ${error?.stack || 'no stack available'}`
         );
     }
 });
+
 
 /* ============================================================
    PLAYWRIGHT CRAWLER
