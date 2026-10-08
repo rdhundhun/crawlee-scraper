@@ -7,4 +7,7 @@ RUN npm ci --omit=dev
 
 COPY . .
 
+# Expose the port your Express server listens on
+EXPOSE 3000
+
 CMD ["npm", "start"]
