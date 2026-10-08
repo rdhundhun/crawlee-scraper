@@ -2052,6 +2052,10 @@ log.info(
         `Blocked/challenge page detected: ${url}`
     );
 
+    /* ========================================================
+       FLARESOLVERR RECOVERY
+       ======================================================== */
+
     const recovered =
         await fetchWithFlareSolverr(
             url,
@@ -2078,6 +2082,45 @@ log.info(
 
         return;
     }
+
+    log.info(
+        `FlareSolverr recovery failed, trying Scrapling: ${url}`
+    );
+
+    /* ========================================================
+       SCRAPLING FINAL RECOVERY
+       ======================================================== */
+
+    const scrapling =
+        await fetchWithScrapling(
+            url,
+            log
+        );
+
+    if (scrapling.success) {
+        const scraplingArticle =
+            extractArticleFromRecoveredHtml(
+                scrapling.html,
+                scrapling.url || url,
+                log
+            );
+
+        await pushData(
+            scraplingArticle
+        );
+
+        log.info(
+            `Scrapling recovery result: ${url} - ` +
+            `${scraplingArticle.articleWordCount} words - ` +
+            `${scraplingArticle.articleExtractionMethod}`
+        );
+
+        return;
+    }
+
+    /* ========================================================
+       ALL RECOVERY ATTEMPTS FAILED
+       ======================================================== */
 
     await pushData({
         url,
@@ -2114,7 +2157,7 @@ log.info(
     });
 
     log.info(
-        `FlareSolverr recovery failed: ${url}`
+        `FlareSolverr and Scrapling recovery failed: ${url}`
     );
 
     return;
