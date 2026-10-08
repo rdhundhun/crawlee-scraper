@@ -1,5 +1,5 @@
 import express from 'express';
-import { CheerioCrawler, RequestQueue } from 'crawlee';
+import { CheerioCrawler, PlaywrightCrawler, RequestQueue } from 'crawlee';
 
 const app = express();
 
