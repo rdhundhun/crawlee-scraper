@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.49.0-jammy
+FROM ecmchow/node-playwright-pnpm:v1.63.0-node22-pnpm11-resolute
 
 WORKDIR /app
 
