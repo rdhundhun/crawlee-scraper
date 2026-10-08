@@ -8,7 +8,7 @@
   "crawlee": "^4.0.0",
   "express": "^5.2.1",
   "playwright": "1.49.1"
-}
+},
     "scripts": {
         "start": "node src/main.js",
         "test": "echo \"Error: oops, the actor has no tests yet, sad!\" && exit 1"
