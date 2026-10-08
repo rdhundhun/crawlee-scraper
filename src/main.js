@@ -1817,6 +1817,46 @@ const crawler = new CheerioCrawler({
 });
 
 /* ============================================================
+   PLAYWRIGHT CRAWLER
+   ============================================================ */
+
+const playwrightCrawler = new PlaywrightCrawler({
+    maxConcurrency: 1,
+
+    maxRequestsPerCrawl: 100,
+
+    async requestHandler({ request, page, log }) {
+        const url =
+            request.loadedUrl ||
+            request.url;
+
+        log.info(`Playwright recovery started: ${url}`);
+
+        await page.waitForLoadState('domcontentloaded');
+
+        const html =
+            await page.content();
+
+        const title =
+            await page.title();
+
+        const bodyText =
+            await page.locator('body').innerText();
+
+        log.info(
+            `Playwright received ${bodyText.length} characters from ${url}`
+        );
+
+        return {
+            url,
+            title,
+            html,
+            bodyText
+        };
+    }
+});
+
+/* ============================================================
    SCRAPE ENDPOINT
    ============================================================ */
 
