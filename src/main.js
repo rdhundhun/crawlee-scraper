@@ -2047,11 +2047,11 @@ const crawler = new CheerioCrawler({
             $.html();
 
        log.info(
-    `DEBUG Reuters response: status=${request.response?.statusCode || 'unknown'}, htmlLength=${html.length}`
+    `DEBUG Response: url=${url}, status=${request.response?.statusCode || 'unknown'}, htmlLength=${html.length}`
 );
 
 log.info(
-    `DEBUG Reuters HTML start: ${html.slice(0, 1000)}`
+    `DEBUG HTML start for ${url}: ${html.slice(0, 1000)}`
 );
 
         const storyTitle =
