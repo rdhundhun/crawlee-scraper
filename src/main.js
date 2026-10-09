@@ -2027,10 +2027,10 @@ const crawler = new CheerioCrawler({
 
     requestHandlerTimeoutSecs: 90,
 
-    ignoreHttpErrorStatusCodes: [401, 403],
+   ignoreHttpErrorStatusCodes: [401, 403],
 
-    sessionPoolOptions: {
-        blockedStatusCodes: [403, 429],
+    useSessionPool: false,
+   
     },
 
     async requestHandler({
