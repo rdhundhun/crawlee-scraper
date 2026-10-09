@@ -1,4 +1,5 @@
 import express from 'express';
+import { chromium } from 'playwright';
 import { CheerioCrawler, PlaywrightCrawler, RequestQueue } from 'crawlee';
 
 const app = express();
@@ -1466,35 +1467,32 @@ const FLARESOLVERR_URL =
     process.env.FLARESOLVERR_URL ||
     'http://10.0.2.5:8191/v1';
 
+/* ============================================================
+   FLARESOLVERR RECOVERY
+   ============================================================ */
+
 async function fetchWithFlareSolverr(url, log) {
     log.info(`FlareSolverr recovery started: ${url}`);
 
     try {
-        const response =
-            await fetch(
-                FLARESOLVERR_URL,
-                {
-                    method: 'POST',
+        const response = await fetch(
+            FLARESOLVERR_URL,
+            {
+                method: 'POST',
 
-                    headers: {
-                        'Content-Type':
-                            'application/json'
-                    },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
 
-                    body: JSON.stringify({
-                        cmd: 'request.get',
+                body: JSON.stringify({
+                    cmd: 'request.get',
+                    url,
+                    maxTimeout: 120000
+                }),
 
-                        url,
-
-                        maxTimeout: 120000
-                    }),
-
-                    signal:
-                        AbortSignal.timeout(
-                            130000
-                        )
-                }
-            );
+                signal: AbortSignal.timeout(130000)
+            }
+        );
 
         if (!response.ok) {
             throw new Error(
@@ -1502,8 +1500,7 @@ async function fetchWithFlareSolverr(url, log) {
             );
         }
 
-        const data =
-            await response.json();
+        const data = await response.json();
 
         if (
             data.status !== 'ok' ||
@@ -1536,108 +1533,80 @@ async function fetchWithFlareSolverr(url, log) {
 
         return {
             success: true,
-
             html,
-
             status,
-
             url: finalUrl
         };
 
     } catch (error) {
-
         log.info(
             `FlareSolverr failed: ${error.message}`
         );
 
         return {
             success: false,
-
             html: '',
-
             status: null,
-
             url,
-
-            error:
-                error.message
+            error: error.message
         };
     }
 }
 
-/* ============================================================
-   PLAYWRIGHT RECOVERY
-   ============================================================ */
-
 async function fetchWithPlaywright(url, log) {
     log.info(`Playwright recovery started: ${url}`);
 
-    let result = null;
+    let browser = null;
+    let page = null;
 
     try {
-        const browserCrawler =
-            new PlaywrightCrawler({
-                maxConcurrency: 1,
-                maxRequestsPerCrawl: 1,
+        browser = await chromium.launch({
+            headless: true
+        });
 
-                async requestHandler({
-                    request,
-                    page,
-                    log: crawlerLog
-                }) {
-                    const loadedUrl =
-                        request.loadedUrl ||
-                        request.url;
+        page = await browser.newPage();
 
-                    crawlerLog.info(
-                        `Playwright fetching: ${loadedUrl}`
-                    );
+        log.info(
+            `Playwright fetching: ${url}`
+        );
 
-                    await page.waitForLoadState(
-                        'domcontentloaded'
-                    );
-
-                    const html =
-                        await page.content();
-
-                    const finalUrl =
-                        page.url() ||
-                        loadedUrl;
-
-                    if (!html.trim()) {
-                        throw new Error(
-                            'Playwright returned empty HTML'
-                        );
-                    }
-
-                    result = {
-                        html,
-                        status: null,
-                        url: finalUrl
-                    };
-
-                    crawlerLog.info(
-                        `Playwright returned ${html.length} HTML characters`
-                    );
+        const response =
+            await page.goto(
+                url,
+                {
+                    waitUntil: 'domcontentloaded',
+                    timeout: 60000
                 }
-            });
+            );
 
-        await browserCrawler.run([url]);
+        const status =
+            response?.status() || null;
 
-        if (!result) {
+        const finalUrl =
+            page.url() || url;
+
+        const html =
+            await page.content();
+
+        if (!html.trim()) {
             throw new Error(
-                'Playwright did not return captured HTML'
+                'Playwright returned empty HTML'
             );
         }
 
+        log.info(
+            `Playwright returned ${html.length} HTML characters, status ${status}`
+        );
+
         return {
             success: true,
-            html: result.html,
-            status: result.status,
-            url: result.url || url
+            html,
+            status,
+            url: finalUrl
         };
 
     } catch (error) {
+
         log.info(
             `Playwright recovery failed: ${error.message}`
         );
@@ -1649,6 +1618,20 @@ async function fetchWithPlaywright(url, log) {
             url,
             error: error.message
         };
+
+    } finally {
+
+        if (page) {
+            try {
+                await page.close();
+            } catch {}
+        }
+
+        if (browser) {
+            try {
+                await browser.close();
+            } catch {}
+        }
     }
 }
 
