@@ -2124,6 +2124,36 @@ if (
         `Blocked/challenge page detected: ${url}`
     );
 
+       // Reuters DataDome restriction:
+    // Do not repeat recovery attempts when Reuters is blocked.
+    const isReuters =
+        new URL(url).hostname === 'www.reuters.com' ||
+        new URL(url).hostname === 'reuters.com';
+
+    if (isReuters) {
+        await pushData({
+            url,
+            title: storyTitle,
+            description: storyDescription,
+            articleText: '',
+            articleTextLength: 0,
+            articleWordCount: 0,
+            articleExtractionMethod: 'blocked-page',
+            articleExtractionValid: false,
+            articleExtractionFailureReason:
+                'publisher-blocked-or-captcha',
+            articleUpdatedFromBody: '',
+            articleUpdatedFromStructured: '',
+            articleIsLivePage: false
+        });
+
+        log.info(
+            `Reuters blocked by publisher; skipping recovery attempts: ${url}`
+        );
+
+        return;
+    }
+
     /* ========================================================
        PLAYWRIGHT RECOVERY
        ======================================================== */
