@@ -1487,10 +1487,10 @@ async function fetchWithFlareSolverr(url, log) {
                 body: JSON.stringify({
                     cmd: 'request.get',
                     url,
-                    maxTimeout: 120000
+                    maxTimeout: 20000
                 }),
 
-                signal: AbortSignal.timeout(130000)
+                signal: AbortSignal.timeout(25000)
             }
         );
 
@@ -2024,6 +2024,8 @@ const crawler = new CheerioCrawler({
     maxConcurrency: 1,
 
     maxRequestsPerCrawl: 1000,
+
+    requestHandlerTimeoutSecs: 90,
 
     ignoreHttpErrorStatusCodes: [401],
 
