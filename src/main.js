@@ -1575,7 +1575,7 @@ async function fetchWithPlaywright(url, log) {
                 url,
                 {
                     waitUntil: 'domcontentloaded',
-                    timeout: 60000
+                    timeout: 15000
                 }
             );
 
@@ -1664,7 +1664,7 @@ async function fetchWithScrapling(url, log) {
 
                     signal:
                         AbortSignal.timeout(
-                            70000
+                            20000
                         )
                 }
             );
