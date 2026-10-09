@@ -1490,7 +1490,7 @@ async function fetchWithFlareSolverr(url, log) {
                     maxTimeout: 20000
                 }),
 
-                signal: AbortSignal.timeout(25000)
+                signal: AbortSignal.timeout(60000)
             }
         );
 
